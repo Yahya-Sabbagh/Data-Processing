@@ -1,0 +1,54 @@
+import pandas as pd
+from scipy.signal import find_peaks
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.signal import medfilt
+
+csv = pd.read_csv('/content/sample.csv')
+csv_data = csv[' Sample Value']
+
+
+# Calculate mean
+mean_signal = np.mean(csv_data)
+print(mean_signal)
+
+# Calculate energy
+energy_signal = np.sum(csv_data**2)
+print(energy_signal)
+# Calculate variance
+variance_signal = np.var(csv_data)
+print(variance_signal)
+
+
+smooth_signal = medfilt(csv_data, kernel_size=5)
+noise = csv_data - smooth_signal
+snr = 10 * np.log10(np.sum(smooth_signal**2) / np.sum(noise**2))
+
+print(f"Mean: {mean_signal}, Energy: {energy_signal}, Variance: {variance_signal}, SNR: {snr}")
+
+
+
+# Detect R-peaks (example using find_peaks)
+peaks, _ = find_peaks(csv_data, height=0.5)  # Adjust height based on your signal characteristics
+
+# Plot ECG signal and detected R-peaks
+plt.plot(csv_data, label='ECG Signal')
+plt.plot(peaks, csv_data[peaks], 'rx', label='R-peaks')
+plt.title('ECG Signal with R-peaks')
+plt.xlabel('Time')
+plt.ylabel('Amplitude')
+plt.legend()
+plt.show()
+
+# Calculate time between R-peaks (assuming a sample rate of 360 Hz, typical for MIT-BIH data)
+sampling_rate = 360
+rr_intervals = np.diff(peaks) / sampling_rate  # RR intervals in seconds
+
+# Heart rate (in bpm)
+heart_rate = 60 / np.mean(rr_intervals)
+
+# Heart rate variability (SDNN)
+hrv = np.std(rr_intervals)
+
+print(f"Heart Rate: {heart_rate:.2f} bpm, HRV (SDNN): {hrv:.2f} s")
+
