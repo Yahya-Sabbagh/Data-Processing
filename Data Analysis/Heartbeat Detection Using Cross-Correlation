@@ -1,0 +1,116 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.signal import correlate
+
+# Load ECG data
+ecg_data = pd.read_csv('/content/sample.csv')
+ecg_signal = ecg_data[' Sample Value']
+
+# Plot the ECG signal
+plt.plot(ecg_signal)
+plt.title("ECG Signal")
+plt.xlabel("Sample")
+plt.ylabel("Amplitude")
+plt.show()
+
+# Extract Heartbeat Template
+heartbeat_template = ecg_signal[400:600]
+
+# Plot the template
+plt.plot(heartbeat_template)
+plt.title("Heartbeat Template")
+plt.xlabel("Sample")
+plt.ylabel("Amplitude")
+plt.show()
+
+# Function for Cross-Correlation
+def cross_correlation(signal, template):
+    return correlate(signal, template, mode='full')
+
+# Function for Peak Detection with Thresholding
+def detect_peaks(correlation, threshold):
+    peaks = np.where(correlation > threshold)[0]
+    return peaks
+
+# Cross-correlation of original ECG signal
+correlation_result = cross_correlation(ecg_signal, heartbeat_template)
+threshold = np.max(correlation_result) * 0.5
+peaks = detect_peaks(correlation_result, threshold)
+
+# Plot cross-correlation with detected peaks
+plt.plot(correlation_result)
+plt.scatter(peaks, correlation_result[peaks], color='red', marker='x')
+plt.title("Detected Peaks in Cross-Correlation with Threshold")
+plt.xlabel("Lag")
+plt.ylabel("Correlation")
+plt.show()
+
+# Function to Add Gaussian Noise to the Signal
+def add_noise(signal, snr):
+    noise_power = np.mean(signal ** 2) / (10 ** (snr / 10))
+    noise = np.random.normal(0, np.sqrt(noise_power), len(signal))
+    return signal + noise
+
+# Detection metrics initialization
+snr_levels = [10, 20, 30]
+detection_accuracies = []
+precisions = []
+recalls = []
+f1_scores = []
+
+# Assume each sample in ECG is either a heartbeat (positive) or not (negative)
+total_samples = len(ecg_signal)
+
+# Simulate noise, detect heartbeats, and calculate metrics at different SNRs
+for snr in snr_levels:
+    noisy_signal = add_noise(ecg_signal, snr)
+    correlation_noisy = cross_correlation(noisy_signal, heartbeat_template)
+    peaks_noisy = detect_peaks(correlation_noisy, threshold)
+
+    # In practice, replace `true_peaks` with actual ground truth peak locations if available
+    true_peaks = peaks
+    TP = len([p for p in peaks_noisy if p in true_peaks])   # True Positives
+    FP = len(peaks_noisy) - TP                              # False Positives
+    FN = len(true_peaks) - TP                               # False Negatives
+    TN = total_samples - (TP + FP + FN)                     # True Negatives
+
+    # Calculate metrics
+    accuracy = (TP + TN) / total_samples * 100 if total_samples > 0 else 0
+    precision = TP / (TP + FP) if (TP + FP) > 0 else 0
+    recall = TP / (TP + FN) if (TP + FN) > 0 else 0
+    f1_score = (2 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+
+    # Append metrics
+    detection_accuracies.append(accuracy)
+    precisions.append(precision)
+    recalls.append(recall)
+    f1_scores.append(f1_score)
+
+    # Plot noisy signal
+    plt.plot(noisy_signal, label=f'SNR {snr} dB')
+plt.title("Noisy ECG Signals at Various SNR Levels")
+plt.xlabel("Sample")
+plt.ylabel("Amplitude")
+plt.legend()
+plt.show()
+
+# Plot detection accuracy vs. SNR
+plt.plot(snr_levels, detection_accuracies, marker='o', label="Detection Accuracy (%)")
+plt.plot(snr_levels, precisions, marker='x', label="Precision")
+plt.plot(snr_levels, recalls, marker='s', label="Recall")
+plt.plot(snr_levels, f1_scores, marker='d', label="F1 Score")
+plt.xlabel("SNR (dB)")
+plt.ylabel("Metrics")
+plt.title("Detection Metrics vs. SNR Level")
+plt.legend()
+plt.show()
+
+
+# Plot detection accuracy vs. SNR
+plt.plot(snr_levels, detection_accuracies, marker='o', label="Detection Accuracy")
+plt.xlabel("SNR (dB)")
+plt.ylabel("Accuracy (%)")
+plt.title("Detection Accuracy vs. SNR Level")
+plt.legend()
+plt.show()
