@@ -1,0 +1,167 @@
+import numpy as np
+from scipy.io.wavfile import write, read
+import matplotlib.pyplot as plt
+from scipy.signal import butter, lfilter, freqz, firwin
+from numpy.fft import fft, fftfreq
+from google.colab import files
+
+# Part 1: Uploading and Processing Voice Signal
+# Upload a .wav file
+uploaded = files.upload()
+filename = list(uploaded.keys())[0]  # Get the uploaded file name
+
+# Read the voice signal from the uploaded file
+sample_rate, voice_signal = read(filename)
+
+# Convert to mono if stereo
+if voice_signal.ndim > 1:
+    voice_signal = voice_signal[:, 0]
+
+print("Audio file loaded successfully.")
+
+# Plot Time-Domain Signal
+plt.figure()
+plt.plot(np.linspace(0, len(voice_signal) / sample_rate, num=len(voice_signal)), voice_signal)
+plt.title("Time-Domain Signal")
+plt.xlabel("Time [s]")
+plt.ylabel("Amplitude")
+plt.show()
+
+# Frequency-Domain Plot
+N = len(voice_signal)
+yf = fft(voice_signal)
+xf = fftfreq(N, 1 / sample_rate)
+
+plt.figure()
+plt.plot(xf[:N // 2], np.abs(yf[:N // 2]))
+plt.title("Frequency Spectrum")
+plt.xlabel("Frequency [Hz]")
+plt.ylabel("Magnitude")
+plt.show()
+
+# Part 2: IIR Filter Design and Application
+def create_iir_filter(filter_type, order, cutoff_freqs, sample_rate):
+    nyquist = 0.5 * sample_rate
+    norm_cutoff = [f / nyquist for f in cutoff_freqs] if isinstance(cutoff_freqs, list) else cutoff_freqs / nyquist
+    b, a = butter(order, norm_cutoff, btype=filter_type)
+    return b, a
+
+# Define cutoff frequencies
+cutoff_low = 3000
+cutoff_high = 500
+band_cutoff = [500, 3000]
+
+# Low-pass, High-pass, Band-pass filters with different orders
+filters = {
+    "low": [create_iir_filter('low', order, cutoff_low, sample_rate) for order in [2, 4, 6]],
+    "high": [create_iir_filter('high', order, cutoff_high, sample_rate) for order in [2, 4, 6]],
+    "band": [create_iir_filter('bandpass', order, band_cutoff, sample_rate) for order in [2, 4, 6]]
+}
+
+# Visualize frequency responses for IIR filters
+for filter_type, filter_list in filters.items():
+    plt.figure()
+    for i, (b, a) in enumerate(filter_list):
+        w, h = freqz(b, a, fs=sample_rate)
+        plt.plot(w, 20 * np.log10(abs(h)), label=f'Order {2 * (i + 1)}')
+    plt.title(f"{filter_type.capitalize()}-Pass Filter Frequency Response")
+    plt.xlabel("Frequency [Hz]")
+    plt.ylabel("Magnitude [dB]")
+    plt.legend()
+    plt.show()
+
+# Apply filters and plot results
+for filter_type, filter_list in filters.items():
+    for i, (b, a) in enumerate(filter_list):
+        filtered_signal = lfilter(b, a, voice_signal)
+        plt.figure()
+        plt.plot(filtered_signal)
+        plt.title(f"{filter_type.capitalize()}-Pass Filtered Signal (Order {2 * (i + 1)}) - Time Domain")
+        plt.xlabel("Sample Index")
+        plt.ylabel("Amplitude")
+        plt.show()
+
+        yf_filtered = fft(filtered_signal)
+        plt.figure()
+        plt.plot(xf[:N // 2], np.abs(yf_filtered[:N // 2]))
+        plt.title(f"{filter_type.capitalize()}-Pass Filtered Signal (Order {2 * (i + 1)}) - Frequency Domain")
+        plt.xlabel("Frequency [Hz]")
+        plt.ylabel("Magnitude")
+        plt.show()
+
+# Part 3: FIR vs. IIR Filters
+# FIR Filter Design
+fir_order = 51  # Changed from 50 to 51 (odd number)
+fir_cutoff_low = cutoff_low / (0.5 * sample_rate)
+fir_cutoff_high = cutoff_high / (0.5 * sample_rate)
+fir_band_cutoff = [cutoff / (0.5 * sample_rate) for cutoff in band_cutoff]
+
+fir_filters = {
+    "low": firwin(fir_order, fir_cutoff_low, pass_zero='lowpass'),
+    "high": firwin(fir_order, fir_cutoff_high, pass_zero='highpass'),
+    "band": firwin(fir_order, fir_band_cutoff, pass_zero='bandpass')
+}
+
+# Apply FIR filters and plot results
+for filter_type, coeffs in fir_filters.items():
+    filtered_fir_signal = lfilter(coeffs, [1.0], voice_signal)
+
+    # Time-Domain
+    plt.figure()
+    plt.plot(filtered_fir_signal)
+    plt.title(f"{filter_type.capitalize()}-Pass FIR Filtered Signal (Time Domain)")
+    plt.xlabel("Sample Index")
+    plt.ylabel("Amplitude")
+    plt.show()
+
+    # Frequency-Domain
+    yf_filtered = fft(filtered_fir_signal)
+    plt.figure()
+    plt.plot(xf[:N // 2], np.abs(yf_filtered[:N // 2]))
+    plt.title(f"{filter_type.capitalize()}-Pass FIR Filtered Signal (Frequency Domain)")
+    plt.xlabel("Frequency [Hz]")
+    plt.ylabel("Magnitude")
+    plt.show()
+
+# Part 4: Adding Noise and Re-filtering
+noise = np.random.normal(0, np.sqrt(np.var(voice_signal) / (10 ** (20 / 10))), len(voice_signal))
+noisy_signal = voice_signal + noise
+
+# Plot Noisy Signal
+plt.figure()
+plt.plot(noisy_signal)
+plt.title("Noisy Signal (Time Domain)")
+plt.xlabel("Sample Index")
+plt.ylabel("Amplitude")
+plt.show()
+
+# Filtering Noisy Signal with IIR and FIR
+for filter_type, filter_list in filters.items():
+    for i, (b, a) in enumerate(filter_list):
+        filtered_noisy_signal = lfilter(b, a, noisy_signal)
+        plt.figure()
+        plt.plot(filtered_noisy_signal)
+        plt.title(f"Noisy {filter_type.capitalize()}-Pass IIR Filtered Signal (Order {2 * (i + 1)}) - Time Domain")
+        plt.xlabel("Sample Index")
+        plt.ylabel("Amplitude")
+        plt.show()
+
+for filter_type, coeffs in fir_filters.items():
+    filtered_noisy_fir_signal = lfilter(coeffs, [1.0], noisy_signal)
+    plt.figure()
+    plt.plot(filtered_noisy_fir_signal)
+    plt.title(f"Noisy {filter_type.capitalize()}-Pass FIR Filtered Signal (Time Domain)")
+    plt.xlabel("Sample Index")
+    plt.ylabel("Amplitude")
+    plt.show()
+
+# Part 5: SNR Calculation
+def calculate_snr(original, filtered):
+    noise_power = np.var(original - filtered)
+    signal_power = np.var(filtered)
+    return 10 * np.log10(signal_power / noise_power)
+
+print(f"SNR Before Filtering: {calculate_snr(voice_signal, noisy_signal)} dB")
+for (b, a) in filters['low']: # Remove filter_type from the unpacking
+    filtered_signal = lfilter(b, a, noisy_signal)
+    print(f"SNR After Low-Pass IIR Filtering: {calculate_snr(voice_signal, filtered_signal)} dB") # Hardcode filter type as "Low-Pass"
