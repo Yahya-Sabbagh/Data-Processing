@@ -1,0 +1,58 @@
+import numpy as np  # Import NumPy for numerical operations
+import scipy.io.wavfile as wav  # Import WAV file reading functionality from SciPy
+import matplotlib.pyplot as plt  # Import Matplotlib for plotting graphs
+from scipy.signal import periodogram, windows  # Import periodogram and window functions from SciPy
+
+# Load the audio file and get the sampling frequency (Fs) and signal data
+Fs, signal = wav.read('/Recording.wav')
+
+# If the file is stereo, convert it to mono by averaging the channels
+if len(signal.shape) > 1:
+    signal = np.mean(signal, axis=1)
+
+# Calculate basic characteristics of the signal
+duration = len(signal) / Fs
+mean_value = np.mean(signal)
+variance = np.var(signal)
+energy = np.sum(signal**2)
+
+# Print basic characteristics of the audio signal
+print(f"Duration: {duration:.2f} seconds")  # Print duration
+print(f"Sampling Frequency: {Fs} Hz")  # Print sampling frequency
+print(f"Number of Samples: {len(signal)}")  # Print number of samples
+print(f"Mean Value: {mean_value:.4f}")  # Print mean value
+print(f"Variance: {variance:.4f}")  # Print variance
+print(f"Energy: {energy:.4f}")  # Print energy
+
+# Compute and plot the Power Spectral Density (PSD) using the periodogram
+frequencies, power = periodogram(signal, Fs)
+power_db = 10 * np.log10(power)  # Convert to dB
+
+plt.figure(figsize=(10, 6))
+plt.semilogy(frequencies, power_db)  # Plot frequencies against power in dB
+plt.title('Power Spectral Density (Periodogram)')
+plt.xlabel('Frequency (Hz)')
+plt.ylabel('Power/Frequency (dB/Hz)')
+plt.xlim(0, Fs / 2)
+plt.grid()
+plt.show()
+
+# Define window types for spectral analysis
+window_types = ['hamming', 'hann', 'blackman', 'bartlett']
+
+# Apply each window type to the signal and plot the periodogram
+for window_type in window_types:
+    window = windows.get_window(window_type, len(signal))
+    windowed_signal = signal * window  # Apply window to the signal
+
+    frequencies, power = periodogram(windowed_signal, Fs)
+    power_db = 10 * np.log10(power)
+
+    plt.figure(figsize=(10, 6))
+    plt.semilogy(frequencies, power_db)
+    plt.title(f'Power Spectral Density with {window_type.capitalize()} Window')
+    plt.xlabel('Frequency (Hz)')
+    plt.ylabel('Power/Frequency (dB/Hz)')
+    plt.xlim(0, Fs / 2)
+    plt.grid()
+    plt.show()
